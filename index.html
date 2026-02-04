@@ -6,7 +6,45 @@
     <title>3D 공간 시각화 - 홈커밍 시뮬레이터</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; background-color: #f5f5f5; }
+        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; background-color: #000; }
+        
+        /* 인트로 화면 스타일 */
+        #intro-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1s ease-in-out, visibility 1s;
+        }
+        #intro-title {
+            color: #fff;
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 0 0 30px rgba(0, 122, 255, 0.6);
+            font-family: 'Arial Black', sans-serif;
+        }
+        #intro-hint {
+            color: #aaa;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+
+        /* 메인 UI 스타일 */
         #ui-overlay {
             position: absolute;
             top: 20px;
@@ -17,14 +55,17 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             border-left: 5px solid #007AFF;
             z-index: 10;
+            opacity: 0;
+            transition: opacity 1s;
+            pointer-events: none;
         }
+        #ui-overlay.active { opacity: 1; pointer-events: auto; }
+
         h1 { margin: 0; font-size: 18px; color: #1a1a1a; letter-spacing: -0.5px; }
         
         #menu {
             margin-top: 12px;
-            display: flex;
-            gap: 10px;
-            pointer-events: auto;
+            display: flex; gap: 10px;
         }
         button {
             background: #007AFF;
@@ -33,11 +74,10 @@
             padding: 8px 15px;
             border-radius: 6px;
             cursor: pointer;
-            font-weight: bold;
-            font-size: 13px;
-            transition: background 0.2s;
+            font-weight: bold; font-size: 13px;
+            transition: all 0.2s;
         }
-        button:hover { background: #0056b3; }
+        button:hover { background: #0056b3; transform: translateY(-1px); }
         
         #controls-hint {
             position: absolute;
@@ -46,18 +86,29 @@
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 10px 25px;
+            padding: 12px 30px;
             border-radius: 50px;
             font-size: 13px;
             backdrop-filter: blur(5px);
             z-index: 10;
             text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            line-height: 1.6;
         }
+        #controls-hint.active { opacity: 1; }
         canvas { display: block; }
     </style>
 </head>
 <body>
 
+    <!-- 인트로 레이어 -->
+    <div id="intro-screen">
+        <div id="intro-title">CAPLUS<br>HOMECOMING SIMULATION</div>
+        <div id="intro-hint">PRESS SPACE TO START</div>
+    </div>
+
+    <!-- 메인 UI 레이어 -->
     <div id="ui-overlay">
         <h1>홈커밍 시뮬레이터</h1>
         <div id="menu">
@@ -75,6 +126,7 @@
         let isMouseDown = false;
         let targetRotationX = 0.8, targetRotationY = -0.6;
         let zoom = 55;
+        let isStarted = false;
         
         const desks = [];
         let selectedObject = null;
@@ -93,7 +145,7 @@
             raycaster = new THREE.Raycaster();
             mouse = new THREE.Vector2();
             
-            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true }); // Depth 버퍼 정밀도 향상
+            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
@@ -124,6 +176,21 @@
             setupInteractions();
 
             animate();
+        }
+
+        function startSimulation() {
+            if (isStarted) return;
+            isStarted = true;
+            
+            const intro = document.getElementById('intro-screen');
+            const ui = document.getElementById('ui-overlay');
+            const hint = document.getElementById('controls-hint');
+            
+            intro.style.opacity = '0';
+            setTimeout(() => { intro.style.visibility = 'hidden'; }, 1000);
+            
+            ui.classList.add('active');
+            hint.classList.add('active');
         }
 
         function setupEnvironment() {
@@ -173,37 +240,29 @@
         }
 
         function createFixedLabel(text, x, y, z, options = {}) {
-            // y 값을 미세하게 차등을 주어 겹침(Z-fighting) 방지
             const { color = "#000000", fontSize = 90, width = 1024, height = 256, rotation = [-Math.PI / 2, 0, 0], scale = [8, 2, 1] } = options;
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
-            // 고해상도 텍스트 처리를 위해 캔버스 스케일링
             canvas.width = width; canvas.height = height;
             ctx.clearRect(0, 0, width, height);
-            
             ctx.font = `Bold ${fontSize}px Arial`;
             ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            
-            // 외곽선 추가로 시인성 확보
             ctx.strokeStyle = "rgba(255, 255, 255, 0.8)"; 
             ctx.lineWidth = 12;
             ctx.strokeText(text, width / 2, height / 2);
             ctx.fillText(text, width / 2, height / 2);
 
             const texture = new THREE.CanvasTexture(canvas);
-            texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // 텍스트 왜곡 방지
-            
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthWrite: false });
             const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
-            mesh.position.set(x, y + 0.05, z); // 바닥보다 살짝 위로 띄움
+            mesh.position.set(x, y + 0.05, z);
             mesh.rotation.set(...rotation);
             mesh.scale.set(...scale);
             scene.add(mesh);
         }
 
         function setupLabels() {
-            // 치수 라벨 (중요도가 높으므로 가장 위에 렌더링되도록 y값 높임)
             createFixedLabel("정면 전체 너비: 10.0m", 0, 0.1, -10.5, { scale: [12, 3, 1], fontSize: 95 });
             createFixedLabel("5.0m (스크린 구역)", 1.75, 0.08, -7.8, { scale: [6, 1.5, 1], color: "#007AFF", fontSize: 80 });
             
@@ -220,7 +279,6 @@
             createFixedLabel("구간 1: 3.5m", 7.2, 0.08, -4.6, { rotation: [-Math.PI/2, 0, -Math.PI/2], color: "#E91E63", fontSize: 75 });
             createFixedLabel("구간 2: 7.5m", 7.2, 0.08, 2.0, { rotation: [-Math.PI/2, 0, -Math.PI/2], color: "#007AFF", fontSize: 75 });
 
-            // 구역 라벨
             createFixedLabel("메인 스크린", 1.75, 0.06, -5.2, { color: "#007AFF", scale: [4, 1, 1], fontSize: 70 });
             createFixedLabel("주방 구역", -3.25, 0.06, -6.6, { color: "#D32F2F", scale: [3, 0.8, 1], fontSize: 65 });
             createFixedLabel("사이드 스크린 1", 3.8, 0.06, 0.5, { rotation: [-Math.PI/2, 0, -Math.PI/2], scale: [3.5, 0.9, 1], fontSize: 65 });
@@ -228,7 +286,6 @@
             createFixedLabel("냉장고/정수기", -6.5, 0.06, -3.5, { rotation: [-Math.PI/2, 0, -Math.PI/2], scale: [4, 1, 1], fontSize: 70 });
             createFixedLabel("화장실 입구", -6.5, 0.06, 5.5, { rotation: [-Math.PI/2, 0, -Math.PI/2], color: "#0055aa", scale: [4, 1, 1], fontSize: 70 });
             
-            // 하단 라벨 (최종 수정된 크기 및 문구)
             createFixedLabel("창고", -2.5, 0.09, 8.2, { scale: [3.5, 0.9, 1], fontSize: 80 });
             createFixedLabel("휴게실", -0.3, 0.09, 8.2, { scale: [4.5, 1.1, 1], color: "#444444", fontSize: 80 });
             createFixedLabel("조리대", 1.9, 0.09, 8.2, { scale: [3.5, 0.9, 1], fontSize: 80 });
@@ -274,6 +331,7 @@
         }
 
         function onMouseDown(e) {
+            if (!isStarted) return;
             if (e.target.tagName === 'BUTTON') return;
             isMouseDown = true;
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -290,6 +348,7 @@
         function onMouseUp() { isMouseDown = false; isDragging = false; }
 
         function onMouseMove(e) {
+            if (!isStarted) return;
             if (isDragging && selectedObject) {
                 mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
                 mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -308,6 +367,10 @@
         }
 
         function onKeyDown(e) {
+            if (e.code === 'Space' && !isStarted) {
+                startSimulation();
+            }
+
             if (!selectedObject) return;
             if (e.key.toLowerCase() === 'r') { selectedObject.rotation.y += Math.PI / 4; selectedObject.userData.outline.update(); }
             if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -320,12 +383,13 @@
 
         function animate() {
             requestAnimationFrame(animate);
+            const lerpFactor = isStarted ? 0.1 : 0.02;
             const targetPos = new THREE.Vector3(
                 zoom * Math.sin(targetRotationY) * Math.cos(targetRotationX),
                 zoom * Math.sin(targetRotationX),
                 zoom * Math.cos(targetRotationY) * Math.cos(targetRotationX)
             );
-            camera.position.lerp(targetPos, 0.1);
+            camera.position.lerp(targetPos, lerpFactor);
             camera.lookAt(0, 0, 0);
             renderer.render(scene, camera);
         }
