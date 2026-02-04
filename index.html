@@ -6,7 +6,7 @@
     <title>3D 공간 시각화 - 홈커밍 시뮬레이터</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; background-color: #000; }
+        body { margin: 0; overflow: hidden; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; background-color: #000; }
         
         /* 인트로 화면 스타일 */
         #intro-screen {
@@ -25,13 +25,14 @@
         }
         #intro-title {
             color: #fff;
-            font-size: 3.5rem;
+            font-size: clamp(2rem, 8vw, 3.5rem);
             font-weight: 900;
             letter-spacing: 4px;
             margin-bottom: 20px;
             text-align: center;
             text-shadow: 0 0 30px rgba(0, 122, 255, 0.6);
             font-family: 'Arial Black', sans-serif;
+            line-height: 1.2;
         }
         #intro-hint {
             color: #aaa;
@@ -95,9 +96,10 @@
             opacity: 0;
             transition: opacity 1s;
             line-height: 1.6;
+            pointer-events: none;
         }
         #controls-hint.active { opacity: 1; }
-        canvas { display: block; }
+        canvas { display: block; outline: none; }
     </style>
 </head>
 <body>
@@ -147,6 +149,7 @@
             
             renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
@@ -327,7 +330,10 @@
                 camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
-            document.addEventListener('wheel', (e) => { zoom = Math.max(10, Math.min(120, zoom + e.deltaY * 0.05)); });
+            document.addEventListener('wheel', (e) => { 
+                if(!isStarted) return;
+                zoom = Math.max(10, Math.min(120, zoom + e.deltaY * 0.05)); 
+            }, { passive: true });
         }
 
         function onMouseDown(e) {
