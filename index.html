@@ -3,396 +3,334 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>서울 주요 기업 본사/사옥 위치 지도 & 선배 명단</title>
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    
+    <title>3D 공간 시각화 - 홈커밍 시뮬레이터</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; background-color: #f5f5f5; }
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-left: 5px solid #007AFF;
+            z-index: 10;
+        }
+        h1 { margin: 0; font-size: 18px; color: #1a1a1a; letter-spacing: -0.5px; }
         
-        /* 왼쪽 지도 영역 */
-        #map-container { flex: 3; position: relative; transition: flex 0.3s ease; }
-        #map { height: 100%; width: 100%; }
+        #menu {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        button:hover { background: #0056b3; }
         
-        /* 검색창 스타일 */
-        #search-box { position: absolute; top: 20px; left: 60px; z-index: 1100; width: 340px; }
-        #search-input { width: 100%; padding: 12px 16px; border-radius: 12px; border: 2px solid #0066FF; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px; outline: none; box-sizing: border-box; }
-        #search-results { position: absolute; top: 52px; left: 0; width: 100%; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 400px; overflow-y: auto; display: none; }
-        .search-item { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-        .search-item:hover { background-color: #f8faff; }
-        
-        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 6px; }
-        .badge-company { background: #eef4ff; color: #0066FF; }
-        .badge-person { background: #333; color: white; }
-        .badge-place { background: #4caf50; color: white; }
-        .badge-pending { background: #ffeded; color: #e63946; border: 1px solid #ffcfcf; }
-
-        /* 그룹핑 정보 (범례) */
-        #legend { position: absolute; bottom: 30px; left: 20px; z-index: 1100; background: white; padding: 12px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.8; }
-        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 2px rgba(0,0,0,0.3); }
-
-        /* 비밀번호 잠금 오버레이 */
-        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(15px); z-index: 5000; display: flex; justify-content: center; align-items: center; flex-direction: column; }
-        .login-box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; width: 360px; max-width: 90%; }
-        .login-box h2 { color: #003399; margin-bottom: 30px; font-size: 28px; letter-spacing: 2px; font-weight: 800; }
-        .login-box input { width: 100%; padding: 14px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; text-align: center; outline: none; box-sizing: border-box; }
-        .login-box button { width: 100%; padding: 14px; background: #003399; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; box-sizing: border-box; }
-        .error-msg { color: #E63946; font-size: 13px; margin-top: 10px; display: none; }
-
-        /* 사이드바 */
-        #sidebar { flex: 1; min-width: 340px; background: #f8f9fa; border-left: 1px solid #ddd; display: flex; flex-direction: column; z-index: 1000; }
-        #list-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 15px; background: white; border-bottom: 1px solid #eee; }
-        #list-content { flex: 1; overflow-y: auto; padding: 15px; }
-        
-        .person-card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #eee; cursor: pointer; transition: all 0.2s; }
-        .person-card.pending { border-left: 4px solid #e63946; }
-        .person-card:hover { border-color: #0066FF; transform: translateY(-2px); }
-        
-        .btn-status-change { margin-top: 10px; width: 100%; padding: 8px; font-size: 12px; background: #eef4ff; border: 1px solid #0066FF; color: #0066FF; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .btn-status-change:hover { background: #0066FF; color white; }
-
-        .map-float-btn { position: absolute; left: 10px; z-index: 1000; background: white; border: none; border-radius: 24px; padding: 10px 16px; cursor: pointer; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
-        #btn-show-list { top: 85px; display: none; }
-        #btn-toggle-pending { top: 135px; }
-
-        /* 팝업 스타일 */
-        .popup-title { font-weight: bold; font-size: 16px; display: block; margin-bottom: 4px; }
-        .popup-members { background-color: #f8f9fa; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px; font-size: 13px; }
+        #controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-size: 13px;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+            text-align: center;
+        }
+        canvas { display: block; }
     </style>
 </head>
 <body>
 
-<!-- 비밀번호 오버레이 -->
-<div id="login-overlay">
-    <div class="login-box">
-        <h2>CAPLUS</h2>
-        <input type="password" id="pw-input" placeholder="비밀번호를 입력하세요" onkeypress="if(event.keyCode==13) checkPassword()">
-        <button onclick="checkPassword()">입장하기</button>
-        <div id="pw-error" class="error-msg">비밀번호가 일치하지 않습니다.</div>
+    <div id="ui-overlay">
+        <h1>홈커밍 시뮬레이터</h1>
+        <div id="menu">
+            <button onclick="addDesk()">+ 4인용 책상 추가</button>
+        </div>
     </div>
-</div>
 
-<div id="map-container">
-    <div id="search-box">
-        <input type="text" id="search-input" placeholder="기업, 선배 이름 혹은 서울 장소 검색..." autocomplete="off">
-        <div id="search-results"></div>
+    <div id="controls-hint">
+        드래그: 화면 회전 / 휠: 확대<br>
+        <b>조작:</b> 클릭 드래그로 이동 | R: 회전 | Del: 삭제
     </div>
-    <div id="map"></div>
-    <div id="legend">
-        <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px;">구역별 분류</div>
-        <div class="legend-item"><div class="legend-color" style="background:#000000"></div> 서울역</div>
-        <div class="legend-item"><div class="legend-color" style="background:#E63946"></div> CBD (도심권)</div>
-        <div class="legend-item"><div class="legend-color" style="background:#0066FF"></div> GBD (강남권)</div>
-        <div class="legend-item"><div class="legend-color" style="background:#2A9D8F"></div> YBD (여의도권)</div>
-        <div class="legend-item"><div class="legend-color" style="background:#F4A261"></div> 기타</div>
-        <div class="legend-item"><div class="legend-color" style="background:#9B5DE5"></div> 경기/외곽</div>
-    </div>
-    <button id="btn-show-list" class="map-float-btn" onclick="toggleSidebar(true)">명단 보기</button>
-    <button id="btn-toggle-pending" class="map-float-btn" onclick="togglePending(!isPendingShown)">보류 포함 보기</button>
-</div>
 
-<div id="sidebar">
-    <div id="list-header">
-        <span style="font-weight: bold; font-size: 18px; color: #333;">참석 명단</span>
-        <button onclick="toggleSidebar(false)" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">✖</button>
-    </div>
-    <div id="list-content"></div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script>
-    // 데이터 및 상태 관리
-    let activeList = [];
-    let pendingList = [];
-    let isPendingShown = false;
-    let markersRef = {};
-    let markerLayerGroup;
-    let searchTimeout = null;
-    let tempSearchMarker = null;
-
-    const groupColors = { "CBD": "#E63946", "GBD": "#0066FF", "YBD": "#2A9D8F", "기타": "#F4A261", "경기": "#9B5DE5" };
-
-    const companies = [
-        { name: "금융위원회", group: "CBD", lat: 37.5749, lng: 126.9750 },
-        { name: "IBK기업은행", group: "CBD", lat: 37.5662, lng: 126.9880 },
-        { name: "SKT", group: "CBD", lat: 37.5664, lng: 126.9850 },
-        { name: "삼성카드", group: "CBD", lat: 37.5626, lng: 126.9760 },
-        { name: "현대해상화재보험", group: "CBD", lat: 37.5705, lng: 126.9767 },
-        { name: "LG생활건강", group: "CBD", lat: 37.5703, lng: 126.9749 },
-        { name: "한국존슨앤드존슨", group: "기타", lat: 37.5284, lng: 126.9685 },
-        { name: "삼성생명", group: "GBD", lat: 37.4973, lng: 127.0274 },
-        { name: "삼성화재", group: "GBD", lat: 37.4950, lng: 127.0250 },
-        { name: "DB손해보험", group: "GBD", lat: 37.5057, lng: 127.0544 },
-        { name: "GS리테일", group: "GBD", lat: 37.5019, lng: 127.0372 },
-        { name: "이즈피엠피", group: "GBD", lat: 37.4854, lng: 126.9922 },
-        { name: "한영회계법인", group: "YBD", lat: 37.5197, lng: 126.9290 },
-        { name: "롯데홈쇼핑", group: "YBD", lat: 37.5375, lng: 126.8920 },
-        { name: "유한킴벌리", group: "기타", lat: 37.5125, lng: 127.1025 },
-        { name: "수협중앙회", group: "기타", lat: 37.5173, lng: 127.1294 },
-        { name: "넥센타이어", group: "기타", lat: 37.5583, lng: 126.8277 },
-        { name: "쿠팡애즈", group: "기타", lat: 37.5150, lng: 127.1030 },
-        { name: "ASML Korea", group: "경기", lat: 37.2190, lng: 127.0900 },
-        { name: "SK E&S 나래에너지서비스", group: "경기", lat: 37.5504, lng: 127.1901 },
-        { name: "대웅제약", group: "GBD", lat: 37.5132, lng: 127.0601 },
-        { name: "LG전자", group: "YBD", lat: 37.5259, lng: 126.9274 },
-        { name: "미래에셋증권", group: "CBD", lat: 37.5647, lng: 126.9839 },
-        { name: "토스뱅크", group: "GBD", lat: 37.5029, lng: 127.0374 },
-        { name: "한국관광공사", group: "경기", lat: 37.3333, lng: 127.1111 },
-        { name: "신용보증기금", group: "CBD", lat: 37.5520, lng: 126.9530 },
-        { name: "현대글로비스", group: "GBD", lat: 37.5250, lng: 127.0420 },
-        { name: "Electrolux", group: "CBD", lat: 37.5600, lng: 126.9860 },
-        { name: "딜로이트", group: "YBD", lat: 37.5250, lng: 126.9240 }
-    ];
-
-    const initialData = {
-        active: ["김영근9", "신동욱10", "김동진14", "노규철18", "홍은성21", "황선호21", "박진련25", "류시진25", "류태광31", "김민우32", "김건우37", "서봉섭37", "예민해37", "유혜라38", "정수혁38", "우성규38", "백지영38", "신예진38", "김미성39", "조은혜41", "서유진42", "김주연42", "리수영42", "박혜진43", "김승민44", "박산하44", "이현지44", "남다은45", "손석채46"],
-        pending: ["석영욱1", "안정진9", "김태량9", "문상석13", "박창현19", "유태훈19", "김문수21", "박세현21", "이유준22", "백민제29", "이우익30", "정희선33", "김진우35", "김민수37", "김영경38", "김영재39"],
-        map: {
-            "김영근":"금융위원회",
-            "신동욱":"한국존슨앤드존슨",
-            "신예진":"한국존슨앤드존슨",
-            "김동진":"유한킴벌리",
-            "노규철":"삼성화재",
-            "황선호":"삼성카드",
-            "박진련":"이즈피엠피",
-            "류시진":"SKT",
-            "홍은성":"미등록",
-            "류태광":"ASML Korea",
-            "김민우":"DB손해보험",
-            "김건우":"롯데홈쇼핑",
-            "서봉섭":"SK E&S 나래에너지서비스",
-            "유혜라":"IBK기업은행",
-            "정수혁":"한영회계법인",
-            "우성규":"수협중앙회",
-            "백지영":"삼성생명",
-            "조은혜":"넥센타이어",
-            "리수영":"쿠팡애즈",
-            "박혜진":"GS리테일",
-            "석영욱":"대웅제약",
-            "김태량":"현대해상화재보험",
-            "안정진":"LG전자",
-            "문상석":"LG생활건강",
-            "유태훈":"신용보증기금",
-            "박창현":"현대글로비스",
-            "김진우":"현대글로비스",
-            "김영재":"현대글로비스",
-            "김문수":"삼성화재",
-            "박세현":"DB손해보험",
-            "이유준":"Electrolux",
-            "백민제":"딜로이트",
-            "이우익":"미래에셋증권",
-            "김민수":"토스뱅크",
-            "김영경":"한국관광공사"
-        }
-    };
-
-    var map = L.map('map').setView([37.5547, 126.9707], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    markerLayerGroup = L.layerGroup().addTo(map);
-
-    function checkPassword() {
-        if (document.getElementById('pw-input').value === '53zips') {
-            document.getElementById('login-overlay').style.display = 'none';
-        } else {
-            document.getElementById('pw-error').style.display = 'block';
-        }
-    }
-
-    function parseItem(item, status) {
-        const m = item.match(/^([가-힣a-zA-Z]+)(\d+)/);
-        const name = m ? m[1] : item;
-        const cp = parseInt(m ? m[2] : 0);
-        const company = initialData.map[name] || "미등록";
-        return { name, cp, company, status, isMarkerCompany: companies.some(c => c.name === company) };
-    }
-
-    function promoteToActive(personName) {
-        const idx = pendingList.findIndex(p => p.name === personName);
-        if (idx > -1) {
-            const person = pendingList.splice(idx, 1)[0];
-            person.status = 'active';
-            activeList.push(person);
-            renderList();
-        }
-    }
-
-    function updateMarkers(displayData) {
-        markerLayerGroup.clearLayers();
-        markersRef = {};
+    <script>
+        let scene, camera, renderer, raycaster, mouse;
+        let isMouseDown = false;
+        let targetRotationX = 0.8, targetRotationY = -0.6;
+        let zoom = 55;
         
-        // 서울역 거점
-        L.marker([37.5547, 126.9707], { icon: L.divIcon({ className: '', html: `<div style="background:#000; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.5);"></div>`, iconSize: [22, 22] }) }).addTo(markerLayerGroup).bindPopup("<strong>📍 서울역 (거점)</strong>");
+        const desks = [];
+        let selectedObject = null;
+        let isDragging = false;
+        const planeForDragging = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-        companies.forEach(comp => {
-            const relevantMembers = displayData.filter(p => p.company === comp.name);
-            if (relevantMembers.length > 0) {
-                const hasActive = relevantMembers.some(m => m.status === 'active');
-                const opacity = hasActive ? 1 : 0.6;
-                const color = groupColors[comp.group] || "#333";
-                
-                const icon = L.divIcon({
-                    className: '',
-                    html: `<div style="background:${color}; width:16px; height:16px; border:2px solid white; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.3); opacity:${opacity}"></div>`,
-                    iconSize: [20, 20]
-                });
-                const marker = L.marker([comp.lat, comp.lng], { icon: icon });
-                let popupHtml = `<div><span class="popup-title">${comp.name}</span><div class="popup-members">` + 
-                    relevantMembers.map(m => `<span>🧑‍💼 CP${m.cp} ${m.name}${m.status === 'pending' ? ' (보류)' : ''}</span><br>`).join('') + 
-                    '</div></div>';
-                marker.bindPopup(popupHtml);
-                markerLayerGroup.addLayer(marker);
-                markersRef[comp.name] = marker;
+        const ROOM_WIDTH = 10;
+        const ROOM_DEPTH = 13;
+        const COL_SIZE = 0.75; 
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf5f7fa);
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true }); // Depth 버퍼 정밀도 향상
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(-15, 25, 15);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // Floor
+            const floorGeo = new THREE.PlaneGeometry(ROOM_WIDTH, ROOM_DEPTH);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            floor.name = "Floor";
+            scene.add(floor);
+
+            const edges = new THREE.EdgesGeometry(floorGeo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xcccccc }));
+            line.rotation.x = -Math.PI / 2;
+            line.position.y = 0.01;
+            scene.add(line);
+
+            setupEnvironment();
+            setupLabels();
+            setupInteractions();
+
+            animate();
+        }
+
+        function setupEnvironment() {
+            function createColumn(x, z, color = 0x666666) {
+                const col = new THREE.Mesh(new THREE.BoxGeometry(COL_SIZE, 3.5, COL_SIZE), new THREE.MeshStandardMaterial({ color }));
+                col.position.set(x, 1.75, z);
+                col.castShadow = true;
+                scene.add(col);
             }
-        });
-    }
 
-    function renderList() {
-        const container = document.getElementById('list-content');
-        container.innerHTML = "";
-        let displayList = isPendingShown ? [...activeList, ...pendingList] : [...activeList];
-        displayList.sort((a,b) => a.cp !== b.cp ? a.cp - b.cp : a.name.localeCompare(b.name));
-        
-        updateMarkers(displayList);
-        
-        displayList.forEach(p => {
-            const card = document.createElement('div');
-            card.className = `person-card ${p.status === 'pending' ? 'pending' : ''}`;
-            
-            let cardContent = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>${p.status === 'pending' ? '<span class="badge badge-pending">보류</span>' : ''}<strong>${p.name}</strong></div>
-                    <span style="font-size: 13px; color: #666;">CP${p.cp}</span>
-                </div>
-                <div style="font-size:12px; color:${p.company === '미등록' ? '#888' : '#0066FF'}; margin-top:4px;">
-                    ${p.company === '미등록' ? '🏢 미등록' : '🏢 ' + p.company}
-                </div>`;
-            
-            if (p.status === 'pending') {
-                cardContent += `<button class="btn-status-change" onclick="event.stopPropagation(); promoteToActive('${p.name}')">참석으로 전환</button>`;
-            }
-            
-            card.innerHTML = cardContent;
-            if (p.isMarkerCompany) card.onclick = () => focusMarker(p.company);
-            container.appendChild(card);
-        });
-    }
+            createColumn(4.625, -6.125); 
+            createColumn(-1.125, -6.125);
+            createColumn(4.625, -2.7, 0x007AFF); 
+            createColumn(-1.125, -2.7);
 
-    function focusMarker(companyName) {
-        if (markersRef[companyName]) {
-            map.setView(markersRef[companyName].getLatLng(), 15);
-            markersRef[companyName].openPopup();
+            const mainScreen = new THREE.Mesh(new THREE.BoxGeometry(5, 2.5, 0.1), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            mainScreen.position.set(1.75, 1.5, -6.45);
+            scene.add(mainScreen);
+
+            const kitchen = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.9, 0.8), new THREE.MeshStandardMaterial({ color: 0xdddddd }));
+            kitchen.position.set(-3.25, 0.45, -6.1);
+            scene.add(kitchen);
+
+            const sideScreenGeo = new THREE.BoxGeometry(0.1, 2.0, 2.5);
+            const sideScreenMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const ss1 = new THREE.Mesh(sideScreenGeo, sideScreenMat); ss1.position.set(4.95, 1.5, 0.5); scene.add(ss1);
+            const ss2 = new THREE.Mesh(sideScreenGeo, sideScreenMat); ss2.position.set(4.95, 1.5, 3.75); scene.add(ss2);
+            
+            const fridge = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.1, 0.7), new THREE.MeshStandardMaterial({ color: 0xaaaaaa }));
+            fridge.rotation.y = Math.PI / 2; fridge.position.set(-4.65, 1.05, -3.5); scene.add(fridge);
+
+            const door = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.5), new THREE.MeshStandardMaterial({ color: 0x007AFF, side: THREE.DoubleSide }));
+            door.rotation.x = -Math.PI / 2; door.position.set(3.5, 0.03, 6.5); scene.add(door);
+
+            const counter = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 0.6), new THREE.MeshStandardMaterial({ color: 0xcccccc }));
+            counter.position.set(1.9, 0.425, 6.2); scene.add(counter);
+
+            const lounge = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 1.2), new THREE.MeshStandardMaterial({ color: 0x444444, transparent: true, opacity: 0.6 }));
+            lounge.position.set(-0.3, 0.6, 6.2); scene.add(lounge);
+
+            const storage = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), new THREE.MeshStandardMaterial({ color: 0x555555, side: THREE.DoubleSide }));
+            storage.rotation.x = -Math.PI / 2; storage.position.set(-2.5, 0.03, 6.5); scene.add(storage);
+
+            const toiletDoor = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), new THREE.MeshStandardMaterial({ color: 0x88ccff, side: THREE.DoubleSide }));
+            toiletDoor.rotation.x = -Math.PI / 2; toiletDoor.rotation.z = Math.PI / 2;
+            toiletDoor.position.set(-4.8, 0.03, 5.5); scene.add(toiletDoor);
         }
-    }
 
-    function togglePending(show) {
-        isPendingShown = show;
-        document.getElementById('btn-toggle-pending').innerText = show ? "참석 명단만 보기" : "보류 포함 보기";
-        renderList();
-    }
+        function createFixedLabel(text, x, y, z, options = {}) {
+            // y 값을 미세하게 차등을 주어 겹침(Z-fighting) 방지
+            const { color = "#000000", fontSize = 90, width = 1024, height = 256, rotation = [-Math.PI / 2, 0, 0], scale = [8, 2, 1] } = options;
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 고해상도 텍스트 처리를 위해 캔버스 스케일링
+            canvas.width = width; canvas.height = height;
+            ctx.clearRect(0, 0, width, height);
+            
+            ctx.font = `Bold ${fontSize}px Arial`;
+            ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            
+            // 외곽선 추가로 시인성 확보
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.8)"; 
+            ctx.lineWidth = 12;
+            ctx.strokeText(text, width / 2, height / 2);
+            ctx.fillText(text, width / 2, height / 2);
 
-    function toggleSidebar(show) {
-        document.getElementById('sidebar').style.display = show ? 'flex' : 'none';
-        document.getElementById('btn-show-list').style.display = show ? 'none' : 'block';
-        setTimeout(() => map.invalidateSize(), 200);
-    }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // 텍스트 왜곡 방지
+            
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+            mesh.position.set(x, y + 0.05, z); // 바닥보다 살짝 위로 띄움
+            mesh.rotation.set(...rotation);
+            mesh.scale.set(...scale);
+            scene.add(mesh);
+        }
 
-    // 검색 로직
-    const searchInput = document.getElementById('search-input');
-    const searchResults = document.getElementById('search-results');
-    
-    searchInput.addEventListener('input', function() {
-        const query = this.value.trim();
-        if (!query) { searchResults.style.display = 'none'; return; }
-        
-        clearTimeout(searchTimeout);
-        
-        let results = [];
-        companies.forEach(c => { if (c.name.includes(query)) results.push({ type: 'company', title: c.name, target: c.name }); });
-        [...activeList, ...pendingList].forEach(p => { if (p.name.includes(query)) results.push({ type: 'person', title: `CP${p.cp} ${p.name}`, target: p.company, isMarker: p.isMarkerCompany }); });
-        
-        renderSearchResults(results);
+        function setupLabels() {
+            // 치수 라벨 (중요도가 높으므로 가장 위에 렌더링되도록 y값 높임)
+            createFixedLabel("정면 전체 너비: 10.0m", 0, 0.1, -10.5, { scale: [12, 3, 1], fontSize: 95 });
+            createFixedLabel("5.0m (스크린 구역)", 1.75, 0.08, -7.8, { scale: [6, 1.5, 1], color: "#007AFF", fontSize: 80 });
+            
+            const line1 = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 1.8), new THREE.MeshBasicMaterial({ color: 0x007AFF }));
+            line1.rotation.x = -Math.PI / 2; line1.position.set(4.25, 0.04, -7.4); scene.add(line1);
+            const line2 = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 1.8), new THREE.MeshBasicMaterial({ color: 0x007AFF }));
+            line2.rotation.x = -Math.PI / 2; line2.position.set(-0.75, 0.04, -7.4); scene.add(line2);
 
-        if (query.length >= 2) {
-            searchTimeout = setTimeout(async () => {
-                try {
-                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=서울 ${query}&limit=5`);
-                    const externalPlaces = await response.json();
-                    
-                    const externalResults = externalPlaces.map(place => ({
-                        type: 'place',
-                        title: place.display_name.split(',')[0],
-                        subtitle: place.display_name,
-                        lat: place.lat,
-                        lng: place.lon
-                    }));
-                    
-                    if (externalResults.length > 0) {
-                        renderSearchResults([...results, ...externalResults]);
-                    }
-                } catch (err) {
-                    console.error("장소 검색 오류:", err);
+            createFixedLabel("3.5m (주방 구역)", -3.25, 0.08, -7.8, { scale: [6, 1.5, 1], color: "#D32F2F", fontSize: 80 });
+            const line3 = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 1.8), new THREE.MeshBasicMaterial({ color: 0xD32F2F }));
+            line3.rotation.x = -Math.PI / 2; line3.position.set(-5.0, 0.04, -7.4); scene.add(line3);
+
+            createFixedLabel("우측 전체 길이: 13.0m", 9.0, 0.1, 0, { scale: [12, 3, 1], rotation: [-Math.PI/2, 0, -Math.PI/2], fontSize: 95 });
+            createFixedLabel("구간 1: 3.5m", 7.2, 0.08, -4.6, { rotation: [-Math.PI/2, 0, -Math.PI/2], color: "#E91E63", fontSize: 75 });
+            createFixedLabel("구간 2: 7.5m", 7.2, 0.08, 2.0, { rotation: [-Math.PI/2, 0, -Math.PI/2], color: "#007AFF", fontSize: 75 });
+
+            // 구역 라벨
+            createFixedLabel("메인 스크린", 1.75, 0.06, -5.2, { color: "#007AFF", scale: [4, 1, 1], fontSize: 70 });
+            createFixedLabel("주방 구역", -3.25, 0.06, -6.6, { color: "#D32F2F", scale: [3, 0.8, 1], fontSize: 65 });
+            createFixedLabel("사이드 스크린 1", 3.8, 0.06, 0.5, { rotation: [-Math.PI/2, 0, -Math.PI/2], scale: [3.5, 0.9, 1], fontSize: 65 });
+            createFixedLabel("사이드 스크린 2", 3.8, 0.06, 3.75, { rotation: [-Math.PI/2, 0, -Math.PI/2], scale: [3.5, 0.9, 1], fontSize: 65 });
+            createFixedLabel("냉장고/정수기", -6.5, 0.06, -3.5, { rotation: [-Math.PI/2, 0, -Math.PI/2], scale: [4, 1, 1], fontSize: 70 });
+            createFixedLabel("화장실 입구", -6.5, 0.06, 5.5, { rotation: [-Math.PI/2, 0, -Math.PI/2], color: "#0055aa", scale: [4, 1, 1], fontSize: 70 });
+            
+            // 하단 라벨 (최종 수정된 크기 및 문구)
+            createFixedLabel("창고", -2.5, 0.09, 8.2, { scale: [3.5, 0.9, 1], fontSize: 80 });
+            createFixedLabel("휴게실", -0.3, 0.09, 8.2, { scale: [4.5, 1.1, 1], color: "#444444", fontSize: 80 });
+            createFixedLabel("조리대", 1.9, 0.09, 8.2, { scale: [3.5, 0.9, 1], fontSize: 80 });
+            createFixedLabel("출입구", 3.5, 0.09, 8.2, { scale: [3.5, 0.9, 1], color: "#007AFF", fontSize: 80 });
+        }
+
+        function addDesk() {
+            const group = new THREE.Group();
+            const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 1.2), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            top.position.y = 0.75; top.castShadow = true; group.add(top);
+            const legGeo = new THREE.BoxGeometry(0.1, 0.75, 0.1);
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            [[1.1, 0.375, 0.5], [-1.1, 0.375, 0.5], [1.1, 0.375, -0.5], [-1.1, 0.375, -0.5]].forEach(p => {
+                const leg = new THREE.Mesh(legGeo, legMat); leg.position.set(...p); group.add(leg);
+            });
+            const chairGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+            const chairMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+            [[0.6, 0.2, 0.8], [-0.6, 0.2, 0.8], [0.6, 0.2, -0.8], [-0.6, 0.2, -0.8]].forEach(p => {
+                const chair = new THREE.Mesh(chairGeo, chairMat); chair.position.set(...p); group.add(chair);
+            });
+            group.position.set(0, 0, 0); group.userData.isDesk = true;
+            const outline = new THREE.BoxHelper(group, 0x007AFF); outline.visible = false;
+            group.add(outline); group.userData.outline = outline;
+            scene.add(group); desks.push(group); selectDesk(group);
+        }
+
+        function selectDesk(obj) {
+            if (selectedObject) selectedObject.userData.outline.visible = false;
+            selectedObject = obj;
+            if (selectedObject) selectedObject.userData.outline.visible = true;
+        }
+
+        function setupInteractions() {
+            window.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            document.addEventListener('wheel', (e) => { zoom = Math.max(10, Math.min(120, zoom + e.deltaY * 0.05)); });
+        }
+
+        function onMouseDown(e) {
+            if (e.target.tagName === 'BUTTON') return;
+            isMouseDown = true;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(desks, true);
+            if (intersects.length > 0) {
+                let obj = intersects[0].object;
+                while (obj.parent && !obj.userData.isDesk) obj = obj.parent;
+                if (obj.userData.isDesk) { selectDesk(obj); isDragging = true; }
+            } else { selectDesk(null); }
+        }
+
+        function onMouseUp() { isMouseDown = false; isDragging = false; }
+
+        function onMouseMove(e) {
+            if (isDragging && selectedObject) {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersectionPoint = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(planeForDragging, intersectionPoint)) {
+                    selectedObject.position.x = Math.max(-4.5, Math.min(4.5, intersectionPoint.x));
+                    selectedObject.position.z = Math.max(-6, Math.min(6, intersectionPoint.z));
+                    selectedObject.userData.outline.update();
                 }
-            }, 500);
-        }
-    });
-
-    function renderSearchResults(results) {
-        if (results.length === 0) {
-            searchResults.style.display = 'none';
-            return;
-        }
-
-        searchResults.innerHTML = results.map(res => {
-            if (res.type === 'place') {
-                return `<div class="search-item" onclick="handlePlaceClick('${res.lat}', '${res.lng}', '${res.title}')">
-                            <div class="item-title"><span class="badge badge-place">장소</span>${res.title}</div>
-                            <div style="font-size:10px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${res.subtitle}</div>
-                        </div>`;
-            } else {
-                return `<div class="search-item" onclick="handleInternalClick('${res.target}', ${res.isMarker !== false})">
-                            <div class="item-title"><span class="badge ${res.type === 'company' ? 'badge-company' : 'badge-person'}">${res.type === 'company' ? '기업' : '선배'}</span>${res.title}</div>
-                        </div>`;
+            } else if (isMouseDown) {
+                targetRotationY += e.movementX * 0.005;
+                targetRotationX += e.movementY * 0.005;
+                targetRotationX = Math.max(0.1, Math.min(Math.PI/2, targetRotationX));
             }
-        }).join('');
-        
-        searchResults.style.display = 'block';
-    }
-
-    function handleInternalClick(target, isMarker) {
-        if (isMarker && markersRef[target]) {
-            focusMarker(target);
         }
-        closeSearch();
-    }
 
-    function handlePlaceClick(lat, lng, title) {
-        const position = [parseFloat(lat), parseFloat(lng)];
-        map.setView(position, 16);
-        
-        if (tempSearchMarker) map.removeLayer(tempSearchMarker);
-        
-        tempSearchMarker = L.marker(position).addTo(map)
-            .bindPopup(`<strong>📍 ${title}</strong>`)
-            .openPopup();
-            
-        closeSearch();
-    }
+        function onKeyDown(e) {
+            if (!selectedObject) return;
+            if (e.key.toLowerCase() === 'r') { selectedObject.rotation.y += Math.PI / 4; selectedObject.userData.outline.update(); }
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                scene.remove(selectedObject);
+                const index = desks.indexOf(selectedObject);
+                if (index > -1) desks.splice(index, 1);
+                selectedObject = null;
+            }
+        }
 
-    function closeSearch() {
-        searchResults.style.display = 'none';
-        searchInput.value = '';
-    }
+        function animate() {
+            requestAnimationFrame(animate);
+            const targetPos = new THREE.Vector3(
+                zoom * Math.sin(targetRotationY) * Math.cos(targetRotationX),
+                zoom * Math.sin(targetRotationX),
+                zoom * Math.cos(targetRotationY) * Math.cos(targetRotationX)
+            );
+            camera.position.lerp(targetPos, 0.1);
+            camera.lookAt(0, 0, 0);
+            renderer.render(scene, camera);
+        }
 
-    function init() {
-        activeList = initialData.active.map(item => parseItem(item, 'active'));
-        pendingList = initialData.pending.map(item => parseItem(item, 'pending'));
-        renderList();
-    }
-
-    init();
-</script>
+        window.onload = init;
+    </script>
 </body>
 </html>
