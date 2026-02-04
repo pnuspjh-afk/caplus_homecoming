@@ -114,7 +114,7 @@
     <div id="ui-overlay">
         <h1>홈커밍 시뮬레이터</h1>
         <div id="menu">
-            <button onclick="addDesk()">+ 4인용 책상 추가</button>
+            <button onclick="addDesk()">+ 4인용 책상(소) 추가</button>
         </div>
     </div>
 
@@ -296,23 +296,45 @@
         }
 
         function addDesk() {
+            const scale = 0.7; // 70% 축소 적용
             const group = new THREE.Group();
-            const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 1.2), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-            top.position.y = 0.75; top.castShadow = true; group.add(top);
-            const legGeo = new THREE.BoxGeometry(0.1, 0.75, 0.1);
+            
+            // 책상 상판 (기존 2.4 x 1.2 -> 1.68 x 0.84)
+            const deskW = 2.4 * scale;
+            const deskD = 1.2 * scale;
+            const top = new THREE.Mesh(new THREE.BoxGeometry(deskW, 0.07, deskD), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            top.position.y = 0.75 * scale; 
+            top.castShadow = true; 
+            group.add(top);
+
+            // 책상 다리
+            const legGeo = new THREE.BoxGeometry(0.08, 0.75 * scale, 0.08);
             const legMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-            [[1.1, 0.375, 0.5], [-1.1, 0.375, 0.5], [1.1, 0.375, -0.5], [-1.1, 0.375, -0.5]].forEach(p => {
+            const legX = (deskW/2 - 0.1);
+            const legZ = (deskD/2 - 0.1);
+            [[legX, 0.375*scale, legZ], [-legX, 0.375*scale, legZ], [legX, 0.375*scale, -legZ], [-legX, 0.375*scale, -legZ]].forEach(p => {
                 const leg = new THREE.Mesh(legGeo, legMat); leg.position.set(...p); group.add(leg);
             });
-            const chairGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+
+            // 의자 (4개)
+            const chairSize = 0.4 * scale;
+            const chairGeo = new THREE.BoxGeometry(chairSize, chairSize, chairSize);
             const chairMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
-            [[0.6, 0.2, 0.8], [-0.6, 0.2, 0.8], [0.6, 0.2, -0.8], [-0.6, 0.2, -0.8]].forEach(p => {
+            const chairX = deskW * 0.25;
+            const chairZ = deskD * 0.7;
+            [[chairX, chairSize/2, chairZ], [-chairX, chairSize/2, chairZ], [chairX, chairSize/2, -chairZ], [-chairX, chairSize/2, -chairZ]].forEach(p => {
                 const chair = new THREE.Mesh(chairGeo, chairMat); chair.position.set(...p); group.add(chair);
             });
-            group.position.set(0, 0, 0); group.userData.isDesk = true;
+
+            group.position.set(0, 0, 0); 
+            group.userData.isDesk = true;
+            
             const outline = new THREE.BoxHelper(group, 0x007AFF); outline.visible = false;
             group.add(outline); group.userData.outline = outline;
-            scene.add(group); desks.push(group); selectDesk(group);
+            
+            scene.add(group); 
+            desks.push(group); 
+            selectDesk(group);
         }
 
         function selectDesk(obj) {
@@ -361,8 +383,8 @@
                 raycaster.setFromCamera(mouse, camera);
                 const intersectionPoint = new THREE.Vector3();
                 if (raycaster.ray.intersectPlane(planeForDragging, intersectionPoint)) {
-                    selectedObject.position.x = Math.max(-4.5, Math.min(4.5, intersectionPoint.x));
-                    selectedObject.position.z = Math.max(-6, Math.min(6, intersectionPoint.z));
+                    selectedObject.position.x = Math.max(-4.8, Math.min(4.8, intersectionPoint.x));
+                    selectedObject.position.z = Math.max(-6.2, Math.min(6.2, intersectionPoint.z));
                     selectedObject.userData.outline.update();
                 }
             } else if (isMouseDown) {
